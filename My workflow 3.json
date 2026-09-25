@@ -1,0 +1,548 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1472,
+        0
+      ],
+      "id": "ae68a024-4521-4b4a-aa5b-4a71fc396222",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://remotive.com/api/remote-jobs?category=software-dev",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -752,
+        0
+      ],
+      "id": "fa1085f1-6aac-4258-8a51-95b1a1840187",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        0
+      ],
+      "id": "c28ab9fc-501d-48b5-a5cd-51b424d11483",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef70f4c3-2aef-41fa-8013-666cce0fc352",
+              "name": "title",
+              "value": "={{$json.title}}",
+              "type": "string"
+            },
+            {
+              "id": "5c64105f-cc85-44fc-8e22-79f88cccf813",
+              "name": "company",
+              "value": "={{$json.company_name}}",
+              "type": "string"
+            },
+            {
+              "id": "695027f6-97ce-46d3-ac85-4924fecf2d91",
+              "name": "location",
+              "value": "={{$json.candidate_required_location}}",
+              "type": "string"
+            },
+            {
+              "id": "5777b73a-3699-4b0e-bc6c-279baa24020a",
+              "name": "job_type",
+              "value": "={{$json.job_type}}",
+              "type": "string"
+            },
+            {
+              "id": "ee96dd1e-c18d-4597-9100-285d506cfb9e",
+              "name": "url",
+              "value": "={{$json.url}}",
+              "type": "string"
+            },
+            {
+              "id": "6b698640-f53c-4c92-a45e-5fd3e3ea5deb",
+              "name": "description",
+              "value": "={{$json.description}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -192,
+        0
+      ],
+      "id": "58b6eb91-1eb6-4bdc-a1a5-545348f45744",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Get the current item's description\nlet description = $input.item.json.description;\n\n// Strip all HTML tags\nlet cleanText = description.replace(/<[^>]*>/g, ' ');\n\n// Collapse multiple spaces/newlines into single spaces\ncleanText = cleanText.replace(/\\s+/g, ' ').trim();\n\n// Limit to first 500 characters to keep it concise for the AI\ncleanText = cleanText.substring(0, 500);\n\n// Return the item with the cleaned description\nreturn {\n  json: {\n    ...$input.item.json,\n    description: cleanText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "9b45c9ec-c583-4754-8bec-52508ace389b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "HumanMessagePromptTemplate",
+              "message": "=You are a job listing analyzer. Read the job listing below and extract structured information.  Job Title: {{$json.title}} Company: {{$json.company}} Job Type: {{$json.job_type}} Description: {{$json.description}}  Analyze this job and respond with ONLY a valid JSON object in this exact format, no extra text, no markdown code blocks:  {   \"seniority\": \"Entry-Level\" or \"Mid-Level\" or \"Senior\" or \"Not Specified\",   \"tech_stack\": \"a short comma-separated list of key technologies mentioned, or 'None' if not a tech role\",   \"summary\": \"one sentence, under 20 words, summarizing what this role actually involves\" }"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        0
+      ],
+      "id": "1824065e-ea60-4d82-98a3-99c2fde78b0e",
+      "name": "Basic LLM Chain",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        784,
+        176
+      ],
+      "id": "c04f4f2f-d2ab-4c40-a60a-000fd3c719de",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "7TEgj7k97fmTQkcO",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "try {\n  const aiResult = JSON.parse($input.item.json.text);\n  const originalJob = $('Dedup Filter').itemMatching($itemIndex).json;\n\n  // Reject responses where the AI clearly didn't have real content to work with\n  const badPhrases = ['job listing is incomplete', 'no details', 'analyze the provided', 'extract structured information'];\n  const summaryLower = (aiResult.summary || '').toLowerCase();\n  const isBadResponse = badPhrases.some(phrase => summaryLower.includes(phrase));\n\n  if (isBadResponse || !originalJob.title) {\n    return null; // skip this item entirely\n  }\n\n  return {\n    json: {\n      title: originalJob.title,\n      company: originalJob.company,\n      location: originalJob.location,\n      job_type: originalJob.job_type,\n      url: originalJob.url,\n      seniority: aiResult.seniority,\n      tech_stack: aiResult.tech_stack,\n      summary: aiResult.summary\n    }\n  };\n} catch (error) {\n  return null; // skip on any parse error too\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "88e51194-bcc8-4245-93cf-c1fc7cc15fc1",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0",
+          "mode": "list",
+          "cachedResultName": "AI Job Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Title": "={{$json.title}}",
+            "Company": "={{$json.company}}",
+            "Location": "={{$json.location}}",
+            "Job Type": "={{$json.job_type}}",
+            "URL": "={{$json.url}}",
+            "Seniority": "={{$json.seniority}}",
+            "Tech Stack": "={{$json.tech_stack}}",
+            "Summary": "={{$json.summary}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Job Type",
+              "displayName": "Job Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Seniority",
+              "displayName": "Seniority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tech Stack",
+              "displayName": "Tech Stack",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "1d4589d4-0297-4de7-9553-767bb84111da",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7Nj6iisGqi93hla5",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxItems": 10
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        0
+      ],
+      "id": "28c20082-d634-4f44-af05-c9d645f29b6f",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0",
+          "mode": "list",
+          "cachedResultName": "AI Job Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cA9WMxQ3DiqpCPowxYstHo2do5jtK3Hgk5-dvuoWLi0/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1216,
+        0
+      ],
+      "id": "7b550deb-d4cf-48b4-9a1d-a27d86c3024b",
+      "name": "Get Existing Rows",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7Nj6iisGqi93hla5",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const existingRows = $('Get Existing Rows').all();\nconst existingUrls = existingRows.map(item => item.json.URL);\n\nconst newJobs = $input.all();\n\nconst filteredJobs = newJobs.filter(job => !existingUrls.includes(job.json.url));\n\nreturn filteredJobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "1f26f357-68b4-4123-a473-2c00204184a5",
+      "name": "Dedup Filter",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        0
+      ],
+      "id": "5ea33bea-5084-4d9f-8878-b87feb3809eb",
+      "name": "Collapse to Single Item"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst validItems = items.filter(item => {\n  const job = item.json;\n  return job.title && job.title.trim() !== '' &&\n         job.description && job.description.trim() !== '' &&\n         job.url && job.url.trim() !== '';\n});\n\nreturn validItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "86626c11-a9c8-4153-b55b-e86bf0615b67",
+      "name": "Validate Job Data"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Validate Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Filter": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Rows": {
+      "main": [
+        [
+          {
+            "node": "Collapse to Single Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collapse to Single Item": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Job Data": {
+      "main": [
+        [
+          {
+            "node": "Dedup Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4c7c9641-0572-4b40-a800-7a18f2011ca6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a2216c1bbea07ce23ac94674969c38b1cf7f1f8ead3b76046a7453e2ba8257c4"
+  },
+  "nodeGroups": [],
+  "id": "lZ5OIIicQezUJq4G",
+  "tags": []
+}
